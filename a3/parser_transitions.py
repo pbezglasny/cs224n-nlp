@@ -8,15 +8,16 @@ Sahil Chopra <schopra8@stanford.edu>
 
 import sys
 
+
 class PartialParse(object):
-    def __init__(self, sentence):
+    def __init__(self, sentence: list):
         """Initializes this partial parse.
 
         @param sentence (list of str): The sentence to be parsed as a list of words.
                                         Your code should not modify the sentence.
         """
         # The sentence being parsed is kept for bookkeeping purposes. Do not alter it in your code.
-        self.sentence = sentence
+        self.sentence: list = sentence
 
         ### YOUR CODE HERE (3 Lines)
         ### Your code should initialize the following fields:
@@ -30,10 +31,11 @@ class PartialParse(object):
         ###
         ### Note: The root token should be represented with the string "ROOT"
         ###
-
+        self.stack = ['ROOT']
+        self.buffer = self.sentence.copy()
+        self.dependencies = []
 
         ### END YOUR CODE
-
 
     def parse_step(self, transition):
         """Performs a single parse step by applying the given transition to this partial parse
@@ -50,8 +52,19 @@ class PartialParse(object):
         ###         2. Left Arc
         ###         3. Right Arc
 
-
         ### END YOUR CODE
+        if transition == 'S':
+            self.stack.append(self.buffer.pop(0))
+        elif transition == 'LA':
+            first = self.stack.pop()
+            second = self.stack.pop()
+            self.dependencies.append((first, second))
+            self.stack.append(first)
+        elif transition == 'RA':
+            first = self.stack.pop()
+            second = self.stack.pop()
+            self.dependencies.append((second, first))
+            self.stack.append(second)
 
     def parse(self, transitions):
         """Applies the provided transitions to this PartialParse
@@ -67,7 +80,7 @@ class PartialParse(object):
         return self.dependencies
 
 
-def minibatch_parse(sentences, model, batch_size):
+def minibatch_parse(sentences: list, model, batch_size: int) -> list:
     """Parses a list of sentences in minibatches using a model.
 
     @param sentences (list of list of str): A list of sentences to be parsed
@@ -101,9 +114,22 @@ def minibatch_parse(sentences, model, batch_size):
     ###             to remove objects from the `unfinished_parses` list. This will free the underlying memory that
     ###             is being accessed by `partial_parses` and may cause your code to crash.
 
-
     ### END YOUR CODE
-
+    partial_parses = [PartialParse(s) for s in sentences]
+    unfinished_parses = partial_parses[:]
+    while len(unfinished_parses) > 0:
+        mini_batch = unfinished_parses[:batch_size]
+        transitions = model.predict(mini_batch)
+        for i in range(len(mini_batch)):
+            mini_batch[i].parse_step(transitions[i])
+        i = 0
+        while i < len(unfinished_parses):
+            if len(unfinished_parses[i].stack) == 1 and len(unfinished_parses[i].buffer) == 0:
+                unfinished_parses.pop(i)
+            else:
+                i += 1
+    for p in partial_parses:
+        dependencies.append(p.dependencies)
     return dependencies
 
 
@@ -144,7 +170,7 @@ def test_parse():
     dependencies = PartialParse(sentence).parse(["S", "S", "S", "LA", "RA", "RA"])
     dependencies = tuple(sorted(dependencies))
     expected = (('ROOT', 'parse'), ('parse', 'sentence'), ('sentence', 'this'))
-    assert dependencies == expected,  \
+    assert dependencies == expected, \
         "parse test resulted in dependencies {:}, expected {:}".format(dependencies, expected)
     assert tuple(sentence) == ("parse", "this", "sentence"), \
         "parse test failed: the input sentence should not be modified"
@@ -156,6 +182,7 @@ class DummyModel(object):
     First shifts everything onto the stack and then does exclusively right arcs if the first word of
     the sentence is "right", "left" if otherwise.
     """
+
     def predict(self, partial_parses):
         return [("RA" if pp.stack[1] is "right" else "LA") if len(pp.buffer) == 0 else "S"
                 for pp in partial_parses]
@@ -191,11 +218,13 @@ def test_minibatch_parse():
 if __name__ == '__main__':
     args = sys.argv
     if len(args) != 2:
-        raise Exception("You did not provide a valid keyword. Either provide 'part_c' or 'part_d', when executing this script")
+        raise Exception(
+            "You did not provide a valid keyword. Either provide 'part_c' or 'part_d', when executing this script")
     elif args[1] == "part_c":
         test_parse_step()
         test_parse()
     elif args[1] == "part_d":
         test_minibatch_parse()
     else:
-        raise Exception("You did not provide a valid keyword. Either provide 'part_c' or 'part_d', when executing this script")
+        raise Exception(
+            "You did not provide a valid keyword. Either provide 'part_c' or 'part_d', when executing this script")
